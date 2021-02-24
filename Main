@@ -1,0 +1,512 @@
+# Main code, all subfeatures implemented for f3
+import tkinter as tk
+from tkinter import ttk
+import sqlite3
+
+# main window application
+
+class App(tk.Tk):
+
+    def __init__(self, *args, **kwargs):
+        tk.Tk.__init__(self, *args, **kwargs)
+
+        self.title("Shopping Basket")
+        self.configure(bg='white')
+
+        container = tk.Frame(self)
+        container.pack(side="top", fill="both", expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+        # displays a selected frame when application is opened
+        self.frames = {}
+        # frames are stacked and are all the same size
+        for F in (HomeFrame, BasketFrame, CheckoutGui, Payment, Receipt):
+            page_name = F.__name__
+            frame = F(parent=container, controller=self)
+            self.frames[page_name] = frame
+
+            frame.grid(row=0, column=0, sticky="nsew")
+
+        self.show_frame("HomeFrame")
+
+    # function to raise a frame to the top
+
+    def show_frame(self, page_name):
+        frame = self.frames[page_name]
+        frame.tkraise()
+
+
+# Home page, includes buttons which leads to different frames
+
+class HomeFrame(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+        lbl_home = tk.Label(self,
+                            text='Add, delete or update shopping basket',
+                            bg='white', fg='black')
+        lbl_home.pack(expand="true")
+        button_basket = tk.Button(self,
+                                  text='Edit Shopping Basket',
+                                  bg='blue', fg='white', command=lambda: controller.show_frame("BasketFrame"))
+        button_basket.pack(expand="true")
+
+        lbl_up = tk.Label(self,
+                          text='Checkout',
+                          bg='white', fg='black')
+        lbl_up.pack(expand="true")
+        button_checkout = tk.Button(self,
+                                    text='Checkout',
+                                    bg='blue', fg='white', command=lambda: controller.show_frame("CheckoutGui"))
+        button_checkout.pack(expand="true")
+
+
+# Add a item page
+class BasketFrame(tk.Frame):
+
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        button_home = tk.Button(self,
+                                text='Home',
+                                bg='blue', fg='white',
+                                command=lambda: controller.show_frame("HomeFrame"))
+        button_home.pack(side="top")
+
+        lbl_add = tk.Label(self,
+                           text='Add items to the shopping basket',
+                           bg='white', fg='black')
+        lbl_add.pack(pady=10)
+
+        pname_l = tk.Label(self, text="Product Name")
+        pname_l.pack()
+        pname_e = tk.Entry(self, bd=4)
+        pname_e.pack()
+
+        qtt_l = tk.Label(self, text="Quantity")
+        qtt_l.pack()
+        qtt_e = tk.Entry(self, bd=4)
+        qtt_e.pack()
+
+        table = ttk.Treeview(self, columns=(1, 2, 3, 4,), show='headings')
+
+        table.heading(1, text="ProductID")
+        table.heading(2, text="Name")
+        table.heading(3, text="Price")
+        table.heading(4, text="Quantity")
+
+        table.pack(side='bottom')
+
+        # Displays the shopping basket records to the user for viewing
+
+        def records():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            c.execute("SELECT DISTINCT productId, productname, price, quantity FROM ShoppingBasket")
+            basket = c.fetchall()
+
+            for record in basket:
+                table.insert("", tk.END, values=record)
+
+            connection.close()
+
+        button_records = tk.Button(self,
+                                   text='Show Records',
+                                   bg='grey', fg='white',
+                                   command=records)
+        button_records.pack(side="bottom")
+
+        # enter function that checks if the product exists and adds to the basket
+        def enter_add():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            pname = pname_e.get()
+            qtt = qtt_e.get()
+
+            # Insert product details into basket where product matches
+            c.execute("INSERT INTO ShoppingBasket (productId, productname, price) SELECT productId,"
+                      " productname,price FROM Products WHERE productname = (?)", [pname])
+
+            # update to insert the product item quantity in basket
+            c.execute("UPDATE ShoppingBasket SET quantity = ? WHERE productname=?", (qtt, pname))
+
+            connection.commit()
+            connection.close()
+
+        button_enter = tk.Button(self,
+                                 text='Add',
+                                 bg='black', fg='white',
+                                 command=enter_add)
+        button_enter.pack()
+
+        lbl_del = tk.Label(self,
+                           text='Delete items from the shopping basket',
+                           bg='white', fg='black')
+        lbl_del.pack(pady=5)
+
+        l3 = tk.Label(self, text="Product Name To Be Deleted")
+        l3.pack()
+        e3 = tk.Entry(self, bd=4)
+        e3.pack()
+
+        # delete function, deletes a record when product name given
+        def enter_del():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            name = e3.get()
+            c.execute("DELETE FROM ShoppingBasket WHERE productname = (?)", [name])
+            del_lbl = tk.Label(self, text=name + " was deleted")
+            del_lbl.pack()
+
+            connection.commit()
+            connection.close()
+
+        button_enter = tk.Button(self,
+                                 text='Delete',
+                                 bg='black', fg='white',
+                                 command=enter_del)
+        button_enter.pack()
+
+        # Update and view page
+
+        lbl_up = tk.Label(self,
+                          text='Change quantity of items in the shopping basket',
+                          bg='white', fg='black')
+        lbl_up.pack(pady=5)
+
+        l4 = tk.Label(self, text="Product Name:")
+        l4.pack()
+        e4 = tk.Entry(self, bd=4)
+        e4.pack()
+
+        l5 = tk.Label(self, text="Quantity:")
+        l5.pack()
+        e5 = tk.Entry(self, bd=4)
+        e5.pack()
+        # Updates a product in the basket, selects a chosen product and changes the quantity
+
+        def enter_up():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            name = e4.get()
+            qtt = e5.get()
+            c.execute("UPDATE ShoppingBasket SET quantity = ? WHERE productname=?", (qtt, name))
+
+            connection.commit()
+            connection.close()
+
+        button_enter = tk.Button(self,
+                                 text='Update',
+                                 bg='black', fg='white',
+                                 command=enter_up)
+        button_enter.pack()
+
+# checkout, calculates total including delivery cost and updates stock
+
+
+class CheckoutGui(tk.Frame):
+
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+        lbl_checkout = tk.Label(self,
+                                text='Checkout:',
+                                bg='white', fg='black')
+        lbl_checkout.pack(pady=5)
+
+        lc = tk.Label(self, text="Total")
+        lc.pack()
+
+        button_payment = tk.Button(self,
+                                   text='Pay now',
+                                   bg='blue', fg='white', command=lambda: controller.show_frame("Payment"))
+        button_payment.pack(pady=10)
+
+        button_home = tk.Button(self,
+                                text='Home',
+                                bg='blue', fg='white', command=lambda: controller.show_frame("HomeFrame"))
+        button_home.pack(side="bottom")
+
+        customerlbl = tk.Label(self, text="Please type in Customer ID:")
+        customerlbl.pack()
+        customer_en = tk.Entry(self, bd=4)
+        customer_en.pack()
+
+        # table that shows the records in the database on the gui
+        table = ttk.Treeview(self, columns=(1, 2, 3, 4,), show='headings')
+
+        table.heading(1, text="CustomerID")
+        table.heading(2, text="ProductTotal")
+        table.heading(3, text="DeliveryCost")
+        table.heading(4, text="OverallTotal")
+
+        table.pack(side='bottom')
+
+        def recordstotal():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            c.execute("SELECT customerId, itemtotal, deliverycost, overalltotal, oid FROM Transactions")
+            basket = c.fetchall()
+
+            for record in basket:
+                table.insert("", tk.END, values=record)
+
+            connection.commit()
+            connection.close()
+
+        button_records = tk.Button(self,
+                                   text='Show Records',
+                                   bg='grey', fg='white',
+                                   command=recordstotal)
+        button_records.pack(side="bottom")
+
+        def calc_basket():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+
+            cust = customer_en.get()
+            total = 0
+            c.execute("INSERT INTO Transactions (customerId) VALUES (?)", [cust])
+            # no duplicate data with select distinct in basket
+            calc = c.execute("SELECT DISTINCT productId, price, quantity FROM ShoppingBasket")
+            for Id, price, qtt in calc:
+                sum = price * qtt
+                total = total + sum
+            print("Total of products:£", total)
+            # product total in basket
+            lblptotal = tk.Label(self,
+                                 text="Total of products:£" + str(total),
+                                 bg='white', fg='black')
+            lblptotal.pack()
+
+            connection.commit()
+            connection.close()
+
+            # apply delivery cost on to the final calculation based on weight of product and the delivery option chosen
+            def delivery_cost():
+                connection = sqlite3.connect("Basket.db")
+                c = connection.cursor()
+
+                if total >= 50:
+                    charge = total + 8
+                    c.execute("UPDATE Transactions SET itemtotal = ?, deliverycost =  8.0, overalltotal = ? "
+                              "WHERE customerId = ?", (total, charge, cust))
+                    connection.commit()
+                    print("Overall total(delivery cost included):£", charge)
+                    lblototal = tk.Label(self,
+                                         text="Overall total(delivery cost included): £" + str(charge),
+                                         bg='white', fg='black')
+                    lblototal.pack()
+                elif total < 50:
+                    charge = total + 6
+                    c.execute("UPDATE Transactions SET itemtotal = ?, deliverycost =  6.0, overalltotal = ?"
+                              "WHERE customerId = ?", (total, charge, cust))
+                    connection.commit()
+                    print("Overall total(delivery cost included):£", charge)
+                    lblototal = tk.Label(self,
+                                         text="Overall total(delivery cost included): £" + str(charge),
+                                         bg='white', fg='black')
+                    lblototal.pack()
+
+                connection.commit()
+                connection.close()
+
+            delivery_cost()
+
+            def stock():
+                connection = sqlite3.connect("Basket.db")
+                c = connection.cursor()
+                stock = c.execute("SELECT productId, stock FROM Products ")
+                quant = c.execute("SELECT DISTINCT productId, quantity FROM ShoppingBasket ")
+                for id, s in stock:
+                    for bid, qtt in quant:
+                        if id == bid:
+                            newstock = int(s - qtt)
+                            c.execute("UPDATE Products SET stock = ?", [newstock])
+                            break
+                        else:
+                            print("Error in Products table")
+                            break
+                connection.commit()
+                connection.close()
+            stock()
+
+        button_enter = tk.Button(self,
+                                 text='Calculate total',
+                                 bg='Grey', fg='white',
+                                 command=calc_basket)
+        button_enter.pack()
+
+
+# Save the user's payment details and verify payment
+
+class Payment(tk.Frame):
+
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+        lbl_payment = tk.Label(self,
+                               text='Payment', bg='yellow', fg='black')
+        lbl_payment.pack(pady=5)
+        lp = tk.Label(self, text="Input Payment Details",
+                      bg='white', fg='black')
+        lp.pack()
+
+        button_home = tk.Button(self,
+                                text='Home',
+                                bg='blue', fg='white', command=lambda: controller.show_frame("HomeFrame"))
+        button_home.pack(side="bottom")
+
+        customerlbl = tk.Label(self, text="Customer ID:")
+        customerlbl.pack()
+        customer_en = tk.Entry(self, bd=4)
+        customer_en.pack()
+
+        titlelbl = tk.Label(self, text="Title (Mr,Mrs,Miss...):")
+        titlelbl.pack()
+        title_en = tk.Entry(self, bd=4)
+        title_en.pack()
+
+        fnamelbl = tk.Label(self, text="First Name:")
+        fnamelbl.pack()
+        fname_en = tk.Entry(self, bd=4)
+        fname_en.pack()
+
+        lnamelbl = tk.Label(self, text="Surname:")
+        lnamelbl.pack()
+        lname_en = tk.Entry(self, bd=4)
+        lname_en.pack()
+
+        addresslbl = tk.Label(self, text="Delivery Address:")
+        addresslbl.pack()
+        address_en = tk.Entry(self, bd=4)
+        address_en.pack()
+
+        postcodelbl = tk.Label(self, text="Postcode:")
+        postcodelbl.pack()
+        postcode_en = tk.Entry(self, bd=4)
+        postcode_en.pack()
+
+        cardlbl = tk.Label(self, text="Please type in your card number, must be 16 digits long")
+        cardlbl.pack()
+        card_num = tk.Entry(self, bd=4)
+        card_num.pack()
+
+        def validity():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+            card = card_num.get()
+            cust = customer_en.get()
+            title = title_en.get()
+            fname = fname_en.get()
+            lname = lname_en.get()
+            address = address_en.get()
+            postcode = postcode_en.get()
+            if len(card_num.get()) == 16:
+                c.execute("INSERT INTO Delivery VALUES (?, ?, ?, ?, ? ,?)",
+                          (cust, title, fname, lname, address, postcode))
+                c.execute("UPDATE Transactions SET cardnumber = ? WHERE customerId = (?)", (card, cust))
+                validlbl = tk.Label(self, text="Card number verified, details saved")
+                validlbl.pack()
+            else:
+                unvalidlbl = tk.Label(self, text="Card number error. Must be 16 digits long "
+                                                 "and include no spaces/separators")
+                unvalidlbl.pack()
+            connection.commit()
+            connection.close()
+
+        button_enter = tk.Button(self,
+                                 text='Enter',
+                                 bg='black', fg='white',
+                                 command=validity)
+        button_enter.pack()
+
+        button_receipt = tk.Button(self,
+                                   text='Receipt',
+                                   bg='grey', fg='white',
+                                   command=lambda: controller.show_frame("Receipt"))
+        button_receipt.pack(side='bottom')
+
+# Display a receipt and save to a file to be printed
+
+
+class Receipt(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+        lbl_receipt = tk.Label(self,
+                               text='Receipt', bg='white', fg='black')
+        lbl_receipt.pack()
+
+        button_home = tk.Button(self,
+                                text='Home',
+                                bg='blue', fg='white', command=lambda: controller.show_frame("HomeFrame"))
+        button_home.pack()
+
+        lbl_confirm = tk.Label(self,
+                               text='Confirm ID')
+        lbl_confirm.pack()
+        en_confirm = tk.Entry(self)
+        en_confirm.pack()
+        lbl_text = tk.Label(self,
+                            text="Products: Id, Name, Price, Quantity  "
+                                 "Total: Item total, Delivery cost, Overall Total",)
+        lbl_text.pack()
+
+        def receipt():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+            cust = int(en_confirm.get())
+            if cust > 0:
+                c.execute("SELECT DISTINCT productId, productname, price, quantity FROM ShoppingBasket")
+                items = c.fetchall()
+                c.execute("SELECT itemtotal, deliverycost, overalltotal FROM Transactions WHERE customerId = (?)",
+                          [cust])
+                total = c.fetchall()
+                lbl_items = tk.Label(self,
+                                     text="Products: " + str(items), bg='white', fg='black')
+                lbl_items.pack()
+                lbl_total = tk.Label(self,
+                                     text="Total: £" + str(total), bg='white', fg='black')
+                lbl_total.pack()
+            else:
+                lbl_error = tk.Label(self,
+                                     text="Error no ID found", bg='white', fg='black')
+                lbl_error.pack()
+
+        def retrieve():
+            connection = sqlite3.connect("Basket.db")
+            c = connection.cursor()
+            cust = int(en_confirm.get())
+            c.execute("SELECT DISTINCT productId, productname, price, quantity FROM ShoppingBasket")
+            items = c.fetchall()
+            c.execute("SELECT itemtotal, deliverycost, overalltotal FROM Transactions WHERE customerId = (?)",
+                      [cust])
+            total = c.fetchall()
+            f = open("Receipt.txt", "w")
+            f.write("Receipt " + "Products: " + str(items) + "Total: £" + str(total))
+            print("File saved")
+            lbl_save = tk.Label(self,
+                                text='SAVED AS TEXT FILE', fg='red')
+            lbl_save.pack()
+
+            connection.commit()
+            connection.close()
+
+        button_show = tk.Button(self, text='Show Receipt',
+                                bg='blue', fg='white', command=receipt)
+        button_show.pack()
+        button_save = tk.Button(self, text='Save Receipt',
+                                bg='blue', fg='white', command=retrieve)
+        button_save.pack(pady=10)
+
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
