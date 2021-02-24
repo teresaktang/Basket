@@ -1,0 +1,23 @@
+import sqlite3
+
+connection = sqlite3.connect("Basket.db")
+c = connection.cursor()
+print("Opened database")
+
+# Creating tables for database only used once to create database
+
+c.execute("CREATE TABLE ShoppingBasket (itemId INTEGER PRIMARY KEY AUTOINCREMENT, productId INTEGER , productname TEXT,"
+                 "price REAL, quantity INTEGER)")
+c.execute("CREATE TABLE Transactions (saleId INTEGER PRIMARY KEY AUTOINCREMENT, customerId INTEGER, cardnumber BIGINT,"
+          " itemtotal REAL, deliverycost REAL, overalltotal REAL)")
+c.execute("CREATE TABLE Delivery (customerId INTEGER PRIMARY KEY ,title TEXT,firstname TEXT, surname TEXT,"
+               " address TEXT, postcode TEXT)")
+c.execute("CREATE TABLE Products (productId INTEGER PRIMARY KEY, productname TEXT, price REAL,"
+          "stock INTEGER)")
+
+c.execute("INSERT INTO Products VALUES (1, 'Bear', 8, 10)")
+c.execute("INSERT INTO Products VALUES (2, 'Toy Truck', 5, 15)")
+
+connection.commit()
+
+connection.close()
